@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Control de Aulas</title>
+
+  <!-- Librería MQTT para navegador -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f4f4f4;
+      margin-top: 60px;
+    }
+    h1 {
+      margin-bottom: 30px;
+    }
+    button {
+      padding: 15px 30px;
+      font-size: 18px;
+      margin: 10px;
+      cursor: pointer;
+    }
+    .estado {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Control de Aire – Aula C1</h1>
+
+  <button onclick="encender()">ENCENDER</button>
+  <button onclick="apagar()">APAGAR</button>
+
+  <div class="estado" id="estado">Conectando al broker...</div>
+
+  <script>
+    // 🔹 Datos MQTT
+    const broker = 'wss://broker.hivemq.com:8884/mqtt';
+    const topic  = 'aula/C1/aire_c1';
+
+    // 🔹 Conexión al broker
+    const client = mqtt.connect(broker);
+
+    client.on('connect', () => {
+      document.getElementById('estado').innerText =
+        'Conectado al broker MQTT';
+    });
+
+    client.on('error', (err) => {
+      document.getElementById('estado').innerText =
+        'Error de conexión MQTT';
+      console.error(err);
+    });
+
+    // 🔹 Funciones de botones
+    function encender() {
+      client.publish(topic, 'ON');
+    }
+
+    function apagar() {
+      client.publish(topic, 'OFF');
+    }
+  </script>
+
+</body>
+</html>
