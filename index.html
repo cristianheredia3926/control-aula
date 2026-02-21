@@ -2,90 +2,135 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Control Aula C1</title>
+  <title>Control Aire Aula C1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <style>
     body {
+      margin: 0;
       font-family: Arial, sans-serif;
-      text-align: center;
-      margin-top: 50px;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
     }
 
+    .control {
+      background: #020617;
+      padding: 25px;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 360px;
+      text-align: center;
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    }
+
+    h2 {
+      margin-bottom: 20px;
+    }
+
+    /* Indicador tipo LED */
     #estado {
-      width: 25px;
-      height: 25px;
+      width: 90px;
+      height: 90px;
       border-radius: 50%;
       background: gray;
-      margin: 10px auto;
+      margin: 20px auto;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.6);
+      transition: background 0.3s;
+    }
+
+    .botones {
+      display: flex;
+      gap: 15px;
+      margin-top: 30px;
     }
 
     button {
-      padding: 10px 20px;
-      margin: 10px;
-      font-size: 16px;
+      flex: 1;
+      padding: 18px;
+      font-size: 18px;
+      border: none;
+      border-radius: 12px;
       cursor: pointer;
+      color: white;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    #btnOn {
+      background: #16a34a;
+    }
+
+    #btnOff {
+      background: #dc2626;
     }
 
     button:disabled {
-      background-color: #ccc;
+      opacity: 0.4;
       cursor: not-allowed;
+    }
+
+    /* Desktop */
+    @media (min-width: 600px) {
+      .control {
+        max-width: 420px;
+      }
     }
   </style>
 </head>
 
 <body>
 
-  <h2>Control de Aire - Aula C1</h2>
+  <div class="control">
+    <h2>Aula C1</h2>
 
-  <div id="estado"></div>
-  <p id="textoEstado">Estado desconocido</p>
+    <div id="estado"></div>
 
-  <button id="btnOn" onclick="encender()">Encender</button>
-  <button id="btnOff" onclick="apagar()">Apagar</button>
+    <div class="botones">
+      <button id="btnOn" onclick="encender()">ON</button>
+      <button id="btnOff" onclick="apagar()">OFF</button>
+    </div>
+  </div>
 
-  <!-- Librería MQTT -->
+  <!-- MQTT -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
-  <!-- JavaScript -->
   <script>
-    // Conexión al broker MQTT (WebSocket)
     const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
-    // Elementos HTML
     const estadoDiv = document.getElementById("estado");
-    const textoEstado = document.getElementById("textoEstado");
     const btnOn = document.getElementById("btnOn");
     const btnOff = document.getElementById("btnOff");
 
-    // Topics
     const topicCmd = "aula/C1/cmd";
     const topicEstado = "aula/C1/estado";
 
-    // Al conectar al broker
     client.on("connect", () => {
-      console.log("Conectado a MQTT");
       client.subscribe(topicEstado);
     });
 
-    // Al recibir mensajes
     client.on("message", (topic, message) => {
       const estado = message.toString();
 
       if (estado === "ENCENDIDO") {
-        estadoDiv.style.background = "green";
-        textoEstado.innerText = "Aire ENCENDIDO";
+        estadoDiv.style.background = "#22c55e";
         btnOn.disabled = true;
         btnOff.disabled = false;
       }
 
       if (estado === "APAGADO") {
-        estadoDiv.style.background = "red";
-        textoEstado.innerText = "Aire APAGADO";
+        estadoDiv.style.background = "#ef4444";
         btnOn.disabled = false;
         btnOff.disabled = true;
       }
     });
 
-    // Funciones de botones
     function encender() {
       client.publish(topicCmd, "ON");
     }
