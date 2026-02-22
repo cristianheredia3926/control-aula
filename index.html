@@ -17,13 +17,39 @@ body {
   height: 100vh;
 }
 
+/* ===== CONTENEDOR ===== */
+.wrapper {
+  width: 100%;
+  max-width: 360px;
+  padding: 20px;
+}
+
+/* ===== PLACEHOLDER ===== */
+.busqueda {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 15px;
+  animation: pulse 1.6s infinite;
+}
+
+/* ===== CONTROL (oculto por defecto) ===== */
 .control {
   background: #020617;
   padding: 30px;
   border-radius: 24px;
-  width: 100%;
-  max-width: 360px;
   box-shadow: 0 0 25px rgba(0,0,0,0.6);
+
+  opacity: 0;
+  transform: translateY(20px) scale(0.97);
+  pointer-events: none;
+
+  transition: all 0.35s ease;
+}
+
+.control.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
 }
 
 h2 {
@@ -80,47 +106,51 @@ input:checked + .slider::before {
   transform: translateX(30px);
 }
 
-/* Deshabilitado */
 .switch input:disabled + .slider {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.estado {
-  margin-top: 15px;
-  font-size: 14px;
-  text-align: center;
-  color: #94a3b8;
+/* ===== ANIMACIÓN BUSCANDO ===== */
+@keyframes pulse {
+  0% { opacity: .4; }
+  50% { opacity: 1; }
+  100% { opacity: .4; }
 }
 </style>
 </head>
 
 <body>
 
-<div class="control">
-  <h2>Aula C1</h2>
+<div class="wrapper">
 
-  <div class="fila">
-    <span>Aire acondicionado</span>
-    <label class="switch">
-      <input type="checkbox" id="switchAire" disabled>
-      <span class="slider"></span>
-    </label>
+  <div class="busqueda" id="busqueda">
+    Buscando dispositivo…
   </div>
 
-  <div class="estado" id="estadoTexto">
-    Dispositivo desconectado
+  <div class="control" id="control">
+    <h2>Aula C1</h2>
+
+    <div class="fila">
+      <span>Aire acondicionado</span>
+      <label class="switch">
+        <input type="checkbox" id="switchAire" disabled>
+        <span class="slider"></span>
+      </label>
+    </div>
   </div>
+
 </div>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
 /* ===== MQTT ===== */
-const topicCmd    = "aula/C1/led/cmd";     // comandos (NO retained)
-const topicEstado = "aula/C1/led/state";   // estado (retained)
+const topicCmd    = "aula/C1/led/cmd";
+const topicEstado = "aula/C1/led/state";
 
-const switchAire  = document.getElementById("switchAire");
-const estadoTexto = document.getElementById("estadoTexto");
+const control    = document.getElementById("control");
+const busqueda   = document.getElementById("busqueda");
+const switchAire = document.getElementById("switchAire");
 
 /* ClientID único */
 const client = mqtt.connect(
@@ -133,9 +163,8 @@ const client = mqtt.connect(
 
 /* Estado inicial */
 switchAire.disabled = true;
-estadoTexto.textContent = "Dispositivo desconectado";
 
-/* Conexión */
+/* Conectado */
 client.on("connect", () => {
   client.subscribe(topicEstado);
 });
@@ -144,25 +173,26 @@ client.on("connect", () => {
 client.on("message", (topic, message) => {
   const estado = message.toString();
 
-  if (estado === "ON") {
-    switchAire.checked = true;
+  if (estado === "ON" || estado === "OFF") {
+    // Mostrar control
+    busqueda.style.display = "none";
+    control.classList.add("visible");
+
+    switchAire.checked = (estado === "ON");
     switchAire.disabled = false;
-    estadoTexto.textContent = "Dispositivo conectado";
   }
-  else if (estado === "OFF") {
-    switchAire.checked = false;
-    switchAire.disabled = false;
-    estadoTexto.textContent = "Dispositivo conectado";
-  }
-  else if (estado === "OFFLINE") {
+
+  if (estado === "OFFLINE") {
+    // Ocultar control
+    control.classList.remove("visible");
+    busqueda.style.display = "block";
     switchAire.disabled = true;
-    estadoTexto.textContent = "Dispositivo desconectado";
   }
 });
 
 /* Usuario cambia switch */
 switchAire.addEventListener("change", () => {
-  switchAire.disabled = true; // 🔒 hasta confirmación real
+  switchAire.disabled = true;
 
   client.publish(
     topicCmd,
