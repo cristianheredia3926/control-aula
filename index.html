@@ -16,33 +16,50 @@ body {
   align-items: center;
   height: 100vh;
 }
+
 .control {
   background: #020617;
   padding: 30px;
   border-radius: 24px;
   width: 100%;
   max-width: 360px;
+  box-shadow: 0 0 25px rgba(0,0,0,0.6);
 }
+
+h2 {
+  text-align: center;
+  font-weight: 500;
+  margin-bottom: 25px;
+}
+
 .fila {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
+/* ===== SWITCH iOS ===== */
 .switch {
   position: relative;
   width: 64px;
   height: 34px;
 }
+
 .switch input {
   opacity: 0;
+  width: 0;
+  height: 0;
 }
+
 .slider {
   position: absolute;
   inset: 0;
   background: #475569;
   border-radius: 34px;
   transition: 0.3s;
+  cursor: pointer;
 }
+
 .slider::before {
   content: "";
   position: absolute;
@@ -54,21 +71,35 @@ body {
   border-radius: 50%;
   transition: 0.3s;
 }
+
 input:checked + .slider {
   background: #22c55e;
 }
+
 input:checked + .slider::before {
   transform: translateX(30px);
 }
+
+/* Deshabilitado */
 .switch input:disabled + .slider {
   opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.estado {
+  margin-top: 15px;
+  font-size: 14px;
+  text-align: center;
+  color: #94a3b8;
 }
 </style>
 </head>
 
 <body>
+
 <div class="control">
-  <h2 style="text-align:center;">Aula C1</h2>
+  <h2>Aula C1</h2>
+
   <div class="fila">
     <span>Aire acondicionado</span>
     <label class="switch">
@@ -76,62 +107,80 @@ input:checked + .slider::before {
       <span class="slider"></span>
     </label>
   </div>
+
+  <div class="estado" id="estadoTexto">
+    Dispositivo desconectado
+  </div>
 </div>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
-const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+const client = mqtt.connect(
+  "wss://broker.hivemq.com:8884/mqtt",
+  {
+    clean: true,
+    clientId: "web_" + Math.random().toString(16).slice(2)
+  }
+);
 
 const switchAire = document.getElementById("switchAire");
+const estadoTexto = document.getElementById("estadoTexto");
 
 const topicCmd = "aula/C1/cmd";
 const topicEstado = "aula/C1/estado";
 const topicOnline = "aula/C1/online";
 
 let online = false;
-let sincronizado = false;
-let actualizando = false;
+let ultimoHeartbeat = 0;
 
+// Conexión MQTT
 client.on("connect", () => {
-  client.subscribe([topicEstado, topicOnline]);
+  client.subscribe([topicOnline, topicEstado]);
 });
 
+// Mensajes entrantes
 client.on("message", (topic, message) => {
   const msg = message.toString();
-  actualizando = true;
 
-  if (topic === topicOnline) {
-    online = (msg === "1");
-    switchAire.disabled = !online;
-  }
-
-  if (topic === topicEstado && online) {
-    if (msg === "ENCENDIDO") {
-      switchAire.checked = true;
-      sincronizado = true;
-    }
-    if (msg === "APAGADO") {
-      switchAire.checked = false;
-      sincronizado = true;
-    }
+  // Heartbeat
+  if (topic === topicOnline && msg === "1") {
+    online = true;
+    ultimoHeartbeat = Date.now();
     switchAire.disabled = false;
+    estadoTexto.textContent = "Dispositivo conectado";
   }
 
-  actualizando = false;
+  // Estado SOLO si está online
+  if (topic === topicEstado && online) {
+    switchAire.checked = (msg === "ENCENDIDO");
+  }
 });
 
+// Timeout → ESP32 OFF
+setInterval(() => {
+  if (online && Date.now() - ultimoHeartbeat > 8000) {
+    online = false;
+    switchAire.disabled = true;
+    estadoTexto.textContent = "Dispositivo desconectado";
+  }
+}, 2000);
+
+// Usuario cambia switch
 switchAire.addEventListener("change", () => {
-  if (!online || !sincronizado || actualizando) {
+  if (!online) {
     switchAire.checked = !switchAire.checked;
     return;
   }
-  client.publish(topicCmd, switchAire.checked ? "ON" : "OFF");
+
+  client.publish(
+    topicCmd,
+    switchAire.checked ? "ON" : "OFF"
+  );
+
+  // Bloquea hasta siguiente heartbeat
   switchAire.disabled = true;
 });
 </script>
-</body>
-</html>
-  </script>
 
 </body>
 </html>
