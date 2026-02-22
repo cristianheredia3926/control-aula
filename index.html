@@ -38,7 +38,7 @@
       align-items: center;
     }
 
-    /* SWITCH TIPO iOS */
+    /* ===== SWITCH TIPO iOS ===== */
     .switch {
       position: relative;
       width: 64px;
@@ -53,8 +53,8 @@
 
     .slider {
       position: absolute;
-      cursor: pointer;
       inset: 0;
+      cursor: pointer;
       background-color: #475569;
       border-radius: 34px;
       transition: 0.3s;
@@ -80,7 +80,12 @@
       transform: translateX(30px);
     }
 
-    /* Desktop */
+    /* ===== SWITCH DESHABILITADO ===== */
+    .switch input:disabled + .slider {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
     @media (min-width: 600px) {
       .control {
         max-width: 420px;
@@ -98,7 +103,7 @@
       <span>Aire acondicionado</span>
 
       <label class="switch">
-        <input type="checkbox" id="switchAire">
+        <input type="checkbox" id="switchAire" disabled>
         <span class="slider"></span>
       </label>
     </div>
@@ -115,13 +120,17 @@
     const topicCmd = "aula/C1/cmd";
     const topicEstado = "aula/C1/estado";
 
+    let estadoRecibido = false;
     let actualizando = false;
 
     client.on("connect", () => {
+      console.log("Conectado a MQTT");
       client.subscribe(topicEstado);
     });
 
     client.on("message", (topic, message) => {
+      if (topic !== topicEstado) return;
+
       const estado = message.toString();
       actualizando = true;
 
@@ -133,14 +142,21 @@
         switchAire.checked = false;
       }
 
+      // 🔓 Habilitar SOLO cuando el ESP32 manda estado
+      switchAire.disabled = false;
+      estadoRecibido = true;
+
       actualizando = false;
     });
 
     switchAire.addEventListener("change", () => {
-      if (actualizando) return;
+      if (!estadoRecibido || actualizando) return;
 
-      const mensaje = switchAire.checked ? "ON" : "OFF";
-      client.publish(topicCmd, mensaje);
+      const comando = switchAire.checked ? "ON" : "OFF";
+      client.publish(topicCmd, comando);
+
+      // 🔒 Bloquear hasta confirmación del ESP32
+      switchAire.disabled = true;
     });
   </script>
 
