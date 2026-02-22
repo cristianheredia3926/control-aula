@@ -8,7 +8,7 @@
   <style>
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #0f172a;
       color: white;
       display: flex;
@@ -19,61 +19,65 @@
 
     .control {
       background: #020617;
-      padding: 25px;
-      border-radius: 20px;
+      padding: 30px;
+      border-radius: 24px;
       width: 100%;
       max-width: 360px;
-      text-align: center;
-      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+      box-shadow: 0 0 25px rgba(0,0,0,0.6);
     }
 
     h2 {
-      margin-bottom: 20px;
+      margin: 0 0 25px;
+      text-align: center;
+      font-weight: 500;
     }
 
-    /* Indicador tipo LED */
-    #estado {
-      width: 90px;
-      height: 90px;
-      border-radius: 50%;
-      background: gray;
-      margin: 20px auto;
-      box-shadow: inset 0 0 10px rgba(0,0,0,0.6);
-      transition: background 0.3s;
-    }
-
-    .botones {
+    .fila {
       display: flex;
-      gap: 15px;
-      margin-top: 30px;
+      justify-content: space-between;
+      align-items: center;
     }
 
-    button {
-      flex: 1;
-      padding: 18px;
-      font-size: 18px;
-      border: none;
-      border-radius: 12px;
+    /* SWITCH TIPO iOS */
+    .switch {
+      position: relative;
+      width: 64px;
+      height: 34px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
       cursor: pointer;
-      color: white;
-      transition: transform 0.1s, opacity 0.2s;
+      inset: 0;
+      background-color: #475569;
+      border-radius: 34px;
+      transition: 0.3s;
     }
 
-    button:active {
-      transform: scale(0.97);
+    .slider::before {
+      content: "";
+      position: absolute;
+      height: 28px;
+      width: 28px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      transition: 0.3s;
     }
 
-    #btnOn {
-      background: #16a34a;
+    input:checked + .slider {
+      background-color: #22c55e;
     }
 
-    #btnOff {
-      background: #dc2626;
-    }
-
-    button:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
+    input:checked + .slider::before {
+      transform: translateX(30px);
     }
 
     /* Desktop */
@@ -90,11 +94,13 @@
   <div class="control">
     <h2>Aula C1</h2>
 
-    <div id="estado"></div>
+    <div class="fila">
+      <span>Aire acondicionado</span>
 
-    <div class="botones">
-      <button id="btnOn" onclick="encender()">ON</button>
-      <button id="btnOff" onclick="apagar()">OFF</button>
+      <label class="switch">
+        <input type="checkbox" id="switchAire">
+        <span class="slider"></span>
+      </label>
     </div>
   </div>
 
@@ -104,12 +110,12 @@
   <script>
     const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
-    const estadoDiv = document.getElementById("estado");
-    const btnOn = document.getElementById("btnOn");
-    const btnOff = document.getElementById("btnOff");
+    const switchAire = document.getElementById("switchAire");
 
     const topicCmd = "aula/C1/cmd";
     const topicEstado = "aula/C1/estado";
+
+    let actualizando = false;
 
     client.on("connect", () => {
       client.subscribe(topicEstado);
@@ -117,27 +123,25 @@
 
     client.on("message", (topic, message) => {
       const estado = message.toString();
+      actualizando = true;
 
       if (estado === "ENCENDIDO") {
-        estadoDiv.style.background = "#22c55e";
-        btnOn.disabled = true;
-        btnOff.disabled = false;
+        switchAire.checked = true;
       }
 
       if (estado === "APAGADO") {
-        estadoDiv.style.background = "#ef4444";
-        btnOn.disabled = false;
-        btnOff.disabled = true;
+        switchAire.checked = false;
       }
+
+      actualizando = false;
     });
 
-    function encender() {
-      client.publish(topicCmd, "ON");
-    }
+    switchAire.addEventListener("change", () => {
+      if (actualizando) return;
 
-    function apagar() {
-      client.publish(topicCmd, "OFF");
-    }
+      const mensaje = switchAire.checked ? "ON" : "OFF";
+      client.publish(topicCmd, mensaje);
+    });
   </script>
 
 </body>
