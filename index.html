@@ -116,13 +116,13 @@ input:checked + .slider::before {
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
 /* ===== MQTT ===== */
-const topicCmd    = "aula/C1/led/cmd";     // NO retained
-const topicEstado = "aula/C1/led/state";   // retained
+const topicCmd    = "aula/C1/led/cmd";     // comandos (NO retained)
+const topicEstado = "aula/C1/led/state";   // estado (retained)
 
 const switchAire  = document.getElementById("switchAire");
 const estadoTexto = document.getElementById("estadoTexto");
 
-/* ClientID único (NO tumba al ESP32) */
+/* ClientID único */
 const client = mqtt.connect(
   "wss://broker.hivemq.com:8884/mqtt",
   {
@@ -147,12 +147,12 @@ client.on("message", (topic, message) => {
   if (estado === "ON") {
     switchAire.checked = true;
     switchAire.disabled = false;
-    estadoTexto.textContent = "Encendido";
+    estadoTexto.textContent = "Dispositivo conectado";
   }
   else if (estado === "OFF") {
     switchAire.checked = false;
     switchAire.disabled = false;
-    estadoTexto.textContent = "Apagado";
+    estadoTexto.textContent = "Dispositivo conectado";
   }
   else if (estado === "OFFLINE") {
     switchAire.disabled = true;
@@ -162,7 +162,7 @@ client.on("message", (topic, message) => {
 
 /* Usuario cambia switch */
 switchAire.addEventListener("change", () => {
-  switchAire.disabled = true; // 🔒 hasta respuesta real del ESP32
+  switchAire.disabled = true; // 🔒 hasta confirmación real
 
   client.publish(
     topicCmd,
