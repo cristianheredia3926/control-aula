@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Control Aire Aula C1</title>
+<title>Control Aires Edificio C</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -17,14 +17,14 @@ body {
   height: 100vh;
 }
 
-/* ===== CONTENEDOR ===== */
+/* ===== CONTENEDOR GENERAL ===== */
 .wrapper {
   width: 100%;
   max-width: 360px;
   padding: 20px;
 }
 
-/* ===== PLACEHOLDER ===== */
+/* ===== TEXTO BUSCANDO ===== */
 .busqueda {
   text-align: center;
   color: #94a3b8;
@@ -32,7 +32,7 @@ body {
   animation: pulse 1.6s infinite;
 }
 
-/* ===== CONTROL (oculto por defecto) ===== */
+/* ===== TARJETA CONTROL (OCULTA POR DEFECTO) ===== */
 .control {
   background: #020617;
   padding: 30px;
@@ -124,10 +124,12 @@ input:checked + .slider::before {
 
 <div class="wrapper">
 
+  <!-- Placeholder -->
   <div class="busqueda" id="busqueda">
     Buscando dispositivo…
   </div>
 
+  <!-- Control -->
   <div class="control" id="control">
     <h2>Aula C1</h2>
 
@@ -144,54 +146,67 @@ input:checked + .slider::before {
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
-/* ===== MQTT ===== */
-const topicCmd    = "aula/C1/led/cmd";
-const topicEstado = "aula/C1/led/state";
+/* ===== MQTT TOPICS ===== */
+const topicCmd    = "aula/C1/led/cmd";     // comandos (NO retained)
+const topicEstado = "aula/C1/led/state";   // estado (retained)
 
+/* ===== ELEMENTOS ===== */
 const control    = document.getElementById("control");
 const busqueda   = document.getElementById("busqueda");
 const switchAire = document.getElementById("switchAire");
 
-/* ClientID único */
+/* ===== ESTADO GLOBAL ===== */
+let dispositivoOnline = false;
+
+/* ===== CLIENTE MQTT ===== */
 const client = mqtt.connect(
   "wss://broker.hivemq.com:8884/mqtt",
   {
     clientId: "web_" + Math.random().toString(16).slice(2),
-    clean: true
+    clean: true,
+    reconnectPeriod: 2000
   }
 );
 
-/* Estado inicial */
+/* ===== ESTADO INICIAL ===== */
 switchAire.disabled = true;
 
-/* Conectado */
+/* ===== CONEXIÓN ===== */
 client.on("connect", () => {
   client.subscribe(topicEstado);
 });
 
-/* Mensajes */
+/* ===== MENSAJES MQTT ===== */
 client.on("message", (topic, message) => {
   const estado = message.toString();
 
+  /* OFFLINE DOMINA TODO */
+  if (estado === "OFFLINE") {
+    dispositivoOnline = false;
+
+    control.classList.remove("visible");
+    busqueda.style.display = "block";
+
+    switchAire.disabled = true;
+    return; //ignora cualquier mensaje viejo
+  }
+
+  /*ON / OFF SOLO SI ESTÁ ONLINE */
   if (estado === "ON" || estado === "OFF") {
-    // Mostrar control
+    dispositivoOnline = true;
+
     busqueda.style.display = "none";
     control.classList.add("visible");
 
     switchAire.checked = (estado === "ON");
     switchAire.disabled = false;
   }
-
-  if (estado === "OFFLINE") {
-    // Ocultar control
-    control.classList.remove("visible");
-    busqueda.style.display = "block";
-    switchAire.disabled = true;
-  }
 });
 
-/* Usuario cambia switch */
+/* ===== USUARIO CAMBIA SWITCH ===== */
 switchAire.addEventListener("change", () => {
+  if (!dispositivoOnline) return;
+
   switchAire.disabled = true;
 
   client.publish(
