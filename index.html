@@ -115,70 +115,59 @@ input:checked + .slider::before {
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
+/* ===== MQTT ===== */
+const topicCmd    = "aula/C1/led/cmd";     // NO retained
+const topicEstado = "aula/C1/led/state";   // retained
+
+const switchAire  = document.getElementById("switchAire");
+const estadoTexto = document.getElementById("estadoTexto");
+
+/* ClientID único (NO tumba al ESP32) */
 const client = mqtt.connect(
   "wss://broker.hivemq.com:8884/mqtt",
   {
-    clean: true,
-    clientId: "web_" + Math.random().toString(16).slice(2)
+    clientId: "web_" + Math.random().toString(16).slice(2),
+    clean: true
   }
 );
 
-const switchAire = document.getElementById("switchAire");
-const estadoTexto = document.getElementById("estadoTexto");
+/* Estado inicial */
+switchAire.disabled = true;
+estadoTexto.textContent = "Dispositivo desconectado";
 
-const topicCmd = "aula/C1/cmd";
-const topicEstado = "aula/C1/estado";
-const topicOnline = "aula/C1/online";
-
-let online = false;
-let ultimoHeartbeat = 0;
-
-// Conexión MQTT
+/* Conexión */
 client.on("connect", () => {
-  client.subscribe([topicOnline, topicEstado]);
+  client.subscribe(topicEstado);
 });
 
-// Mensajes entrantes
+/* Mensajes */
 client.on("message", (topic, message) => {
-  const msg = message.toString();
+  const estado = message.toString();
 
-  // Heartbeat
-  if (topic === topicOnline && msg === "1") {
-    online = true;
-    ultimoHeartbeat = Date.now();
+  if (estado === "ON") {
+    switchAire.checked = true;
     switchAire.disabled = false;
-    estadoTexto.textContent = "Dispositivo conectado";
+    estadoTexto.textContent = "Encendido";
   }
-
-  // Estado SOLO si está online
-  if (topic === topicEstado && online) {
-    switchAire.checked = (msg === "ENCENDIDO");
+  else if (estado === "OFF") {
+    switchAire.checked = false;
+    switchAire.disabled = false;
+    estadoTexto.textContent = "Apagado";
   }
-});
-
-// Timeout → ESP32 OFF
-setInterval(() => {
-  if (online && Date.now() - ultimoHeartbeat > 8000) {
-    online = false;
+  else if (estado === "OFFLINE") {
     switchAire.disabled = true;
     estadoTexto.textContent = "Dispositivo desconectado";
   }
-}, 2000);
+});
 
-// Usuario cambia switch
+/* Usuario cambia switch */
 switchAire.addEventListener("change", () => {
-  if (!online) {
-    switchAire.checked = !switchAire.checked;
-    return;
-  }
+  switchAire.disabled = true; // 🔒 hasta respuesta real del ESP32
 
   client.publish(
     topicCmd,
     switchAire.checked ? "ON" : "OFF"
   );
-
-  // Bloquea hasta siguiente heartbeat
-  switchAire.disabled = true;
 });
 </script>
 
