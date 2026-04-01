@@ -32,17 +32,15 @@ body {
   animation: pulse 1.6s infinite;
 }
 
-/* ===== TARJETA CONTROL (OCULTA POR DEFECTO) ===== */
+/* ===== TARJETA CONTROL ===== */
 .control {
   background: #020617;
   padding: 30px;
   border-radius: 24px;
   box-shadow: 0 0 25px rgba(0,0,0,0.6);
-
   opacity: 0;
   transform: translateY(20px) scale(0.97);
   pointer-events: none;
-
   transition: all 0.35s ease;
 }
 
@@ -111,7 +109,6 @@ input:checked + .slider::before {
   cursor: not-allowed;
 }
 
-/* ===== ANIMACIÓN BUSCANDO ===== */
 @keyframes pulse {
   0% { opacity: .4; }
   50% { opacity: 1; }
@@ -124,12 +121,10 @@ input:checked + .slider::before {
 
 <div class="wrapper">
 
-  <!-- Placeholder -->
   <div class="busqueda" id="busqueda">
-    Buscando dispositivo…
+    Buscando dispositivo en Aula C1…
   </div>
 
-  <!-- Control -->
   <div class="control" id="control">
     <h2>Aula C1</h2>
 
@@ -145,74 +140,82 @@ input:checked + .slider::before {
 </div>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-<script>
-/* ===== MQTT TOPICS ===== */
-const topicCmd    = "aula/C1/led/cmd";     // comandos (NO retained)
-const topicEstado = "aula/C1/led/state";   // estado (retained)
 
-/* ===== ELEMENTOS ===== */
-const control    = document.getElementById("control");
+<script>
+/* ===== CONFIGURACIÓN MQTT ===== */
+// Tópicos actualizados para el control real del aire
+const topicCmd    = "aula/C1/aire/cmd";   
+const topicEstado = "aula/C1/aire/state"; 
+
 const busqueda   = document.getElementById("busqueda");
+const control    = document.getElementById("control");
 const switchAire = document.getElementById("switchAire");
 
-/* ===== ESTADO GLOBAL ===== */
 let dispositivoOnline = false;
 
-/* ===== CLIENTE MQTT ===== */
-const client = mqtt.connect(
-  "wss://broker.hivemq.com:8884/mqtt",
-  {
-    clientId: "web_" + Math.random().toString(16).slice(2),
-    clean: true,
-    reconnectPeriod: 2000
-  }
-);
+/* ===== CONEXIÓN AL BROKER ===== */
+const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
+  clientId: "web_control_" + Math.random().toString(16).slice(2),
+  clean: true,
+  reconnectPeriod: 2000
+});
 
-/* ===== ESTADO INICIAL ===== */
-switchAire.disabled = true;
-
-/* ===== CONEXIÓN ===== */
+// Al conectar, nos suscribimos al estado del aire
 client.on("connect", () => {
+  console.log("Conectado al Broker");
   client.subscribe(topicEstado);
 });
 
-/* ===== MENSAJES MQTT ===== */
+/* ===== LÓGICA DE RECEPCIÓN (Mensajes del ESP32) ===== */
 client.on("message", (topic, message) => {
-  const estado = message.toString();
+  const estado = message.toString().toUpperCase();
+  console.log("Estado recibido:", estado);
 
-  /* OFFLINE DOMINA TODO */
   if (estado === "OFFLINE") {
     dispositivoOnline = false;
-
     control.classList.remove("visible");
     busqueda.style.display = "block";
-
     switchAire.disabled = true;
-    return; //ignora cualquier mensaje viejo
+    return;
   }
 
-  /*ON / OFF SOLO SI ESTÁ ONLINE */
   if (estado === "ON" || estado === "OFF") {
     dispositivoOnline = true;
-
+    
+    // Ocultar placeholder y mostrar control
     busqueda.style.display = "none";
     control.classList.add("visible");
 
+    // Actualizar visualmente el switch y habilitarlo
     switchAire.checked = (estado === "ON");
     switchAire.disabled = false;
   }
 });
 
-/* ===== USUARIO CAMBIA SWITCH ===== */
+/* ===== LÓGICA DE ENVÍO (Interacción Usuario) ===== */
 switchAire.addEventListener("change", () => {
   if (!dispositivoOnline) return;
 
+  // Deshabilitamos temporalmente mientras el ESP32 confirma la acción
   switchAire.disabled = true;
 
-  client.publish(
-    topicCmd,
-    switchAire.checked ? "ON" : "OFF"
-  );
+  const comando = switchAire.checked ? "ON" : "OFF";
+  
+  client.publish(topicCmd, comando, { qos: 1 }, (err) => {
+    if (err) {
+      console.error("Error al enviar:", err);
+      switchAire.disabled = false;
+      switchAire.checked = !switchAire.checked; // Revertir si hay error
+    }
+  });
+});
+
+/* Si el broker se desconecta por alguna razón */
+client.on("close", () => {
+  dispositivoOnline = false;
+  control.classList.remove("visible");
+  busqueda.style.display = "block";
+  busqueda.innerText = "Reconectando con el servidor...";
 });
 </script>
 
