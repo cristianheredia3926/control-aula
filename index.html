@@ -24,30 +24,18 @@ body {
   padding: 20px;
 }
 
-/* ===== TEXTO BUSCANDO ===== */
-.busqueda {
-  text-align: center;
-  color: #94a3b8;
-  font-size: 15px;
-  animation: pulse 1.6s infinite;
-}
-
-/* ===== TARJETA CONTROL ===== */
+/* ===== TARJETA CONTROL (VISIBLE POR DEFECTO) ===== */
 .control {
   background: #020617;
   padding: 30px;
   border-radius: 24px;
   box-shadow: 0 0 25px rgba(0,0,0,0.6);
-  opacity: 0;
-  transform: translateY(20px) scale(0.97);
-  pointer-events: none;
-  transition: all 0.35s ease;
-}
-
-.control.visible {
+  
+  /* Eliminamos la opacidad 0 y el transform inicial */
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: translateY(0);
   pointer-events: auto;
+  transition: all 0.35s ease;
 }
 
 h2 {
@@ -104,15 +92,15 @@ input:checked + .slider::before {
   transform: translateX(30px);
 }
 
+/* Ajuste para que no se vea "apagado" al estar deshabilitado temporalmente */
 .switch input:disabled + .slider {
-  opacity: 0.4;
-  cursor: not-allowed;
+  opacity: 0.7;
+  cursor: wait;
 }
 
-@keyframes pulse {
-  0% { opacity: .4; }
-  50% { opacity: 1; }
-  100% { opacity: .4; }
+/* Eliminamos la animación de búsqueda por ahora */
+#busqueda {
+  display: none;
 }
 </style>
 </head>
@@ -121,9 +109,7 @@ input:checked + .slider::before {
 
 <div class="wrapper">
 
-  <div class="busqueda" id="busqueda">
-    Buscando dispositivo en Aula C1…
-  </div>
+  <div class="busqueda" id="busqueda"></div>
 
   <div class="control" id="control">
     <h2>Aula C1</h2>
@@ -131,7 +117,7 @@ input:checked + .slider::before {
     <div class="fila">
       <span>Aire acondicionado</span>
       <label class="switch">
-        <input type="checkbox" id="switchAire" disabled>
+        <input type="checkbox" id="switchAire">
         <span class="slider"></span>
       </label>
     </div>
@@ -140,82 +126,63 @@ input:checked + .slider::before {
 </div>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
 <script>
-/* ===== CONFIGURACIÓN MQTT ===== */
-// Tópicos actualizados para el control real del aire
+/* ===== MQTT TOPICS ===== */
 const topicCmd    = "aula/C1/aire/cmd";   
 const topicEstado = "aula/C1/aire/state"; 
 
-const busqueda   = document.getElementById("busqueda");
+/* ===== ELEMENTOS ===== */
 const control    = document.getElementById("control");
 const switchAire = document.getElementById("switchAire");
 
-let dispositivoOnline = false;
+/* ===== CLIENTE MQTT ===== */
+const client = mqtt.connect(
+  "wss://broker.hivemq.com:8884/mqtt",
+  {
+    clientId: "web_test_" + Math.random().toString(16).slice(2),
+    clean: true,
+    reconnectPeriod: 2000
+  }
+);
 
-/* ===== CONEXIÓN AL BROKER ===== */
-const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
-  clientId: "web_control_" + Math.random().toString(16).slice(2),
-  clean: true,
-  reconnectPeriod: 2000
-});
-
-// Al conectar, nos suscribimos al estado del aire
+/* ===== CONEXIÓN ===== */
 client.on("connect", () => {
-  console.log("Conectado al Broker");
+  console.log("MQTT Conectado");
   client.subscribe(topicEstado);
 });
 
-/* ===== LÓGICA DE RECEPCIÓN (Mensajes del ESP32) ===== */
+/* ===== MENSAJES MQTT (FEEDBACK) ===== */
 client.on("message", (topic, message) => {
   const estado = message.toString().toUpperCase();
-  console.log("Estado recibido:", estado);
 
-  if (estado === "OFFLINE") {
-    dispositivoOnline = false;
-    control.classList.remove("visible");
-    busqueda.style.display = "block";
-    switchAire.disabled = true;
-    return;
-  }
-
+  // Actualizamos el switch según lo que diga el ESP32
   if (estado === "ON" || estado === "OFF") {
-    dispositivoOnline = true;
-    
-    // Ocultar placeholder y mostrar control
-    busqueda.style.display = "none";
-    control.classList.add("visible");
-
-    // Actualizar visualmente el switch y habilitarlo
     switchAire.checked = (estado === "ON");
-    switchAire.disabled = false;
+    switchAire.disabled = false; // Liberamos el control
   }
 });
 
-/* ===== LÓGICA DE ENVÍO (Interacción Usuario) ===== */
+/* ===== USUARIO CAMBIA SWITCH ===== */
 switchAire.addEventListener("change", () => {
-  if (!dispositivoOnline) return;
-
-  // Deshabilitamos temporalmente mientras el ESP32 confirma la acción
+  // Bloqueo momentáneo para evitar spam de ráfagas IR
   switchAire.disabled = true;
 
   const comando = switchAire.checked ? "ON" : "OFF";
-  
-  client.publish(topicCmd, comando, { qos: 1 }, (err) => {
-    if (err) {
-      console.error("Error al enviar:", err);
-      switchAire.disabled = false;
-      switchAire.checked = !switchAire.checked; // Revertir si hay error
-    }
-  });
-});
+  console.log("Enviando comando IR:", comando);
 
-/* Si el broker se desconecta por alguna razón */
-client.on("close", () => {
-  dispositivoOnline = false;
-  control.classList.remove("visible");
-  busqueda.style.display = "block";
-  busqueda.innerText = "Reconectando con el servidor...";
+  client.publish(
+    topicCmd,
+    comando,
+    { qos: 1 }
+  );
+
+  // Timeout de seguridad: si el ESP32 no confirma en 4s, liberamos el switch
+  setTimeout(() => {
+    if (switchAire.disabled) {
+      switchAire.disabled = false;
+      console.warn("El dispositivo no confirmó el estado, liberando control.");
+    }
+  }, 4000);
 });
 </script>
 
