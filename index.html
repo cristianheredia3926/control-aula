@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Control Aires Edificio C</title>
+<title>Control Aires Edificio C1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -19,14 +19,20 @@
 
   .wrapper {
     width: 100%;
-    max-width: 360px;
+    max-width: 380px;
     padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px; /* Espacio entre la sección del aire 1 y el aire 2 */
   }
 
-  /* ===== ESTADO BUSCANDO ===== */
-  #busqueda {
+  /* ===== ESTADOS DE BÚSQUEDA ===== */
+  .busqueda {
     text-align: center;
-    display: block; /* Visible por defecto */
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 24px;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
   }
 
   .spinner {
@@ -44,28 +50,19 @@
     100% { transform: rotate(360deg); }
   }
 
-  /* ===== CONTENEDOR DE TARJETAS ===== */
-  #contenedor-tarjetas {
-    display: none; /* Oculto hasta detectar ESP32 */
-    flex-direction: column;
-    gap: 20px; /* Espacio entre las tarjetas */
-    opacity: 0;
-    transform: translateY(10px);
-    transition: all 0.4s ease;
-  }
-
-  #contenedor-tarjetas.visible {
-    display: flex;
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  /* ===== TARJETA INDIVIDUAL ===== */
+  /* ===== TARJETAS ===== */
   .tarjeta {
     background: #020617;
     padding: 25px 30px;
     border-radius: 24px;
     box-shadow: 0 0 25px rgba(0,0,0,0.6);
+    display: none; /* Oculto hasta que el ESP32 se reporte ONLINE */
+    animation: fadeIn 0.4s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   h2 { 
@@ -102,107 +99,150 @@
 <body>
 
 <div class="wrapper">
-  <div id="busqueda">
-    <div class="spinner"></div>
-    <p>Buscando dispositivo...</p>
-  </div>
+  
+  <div id="seccionAire1">
+    <div id="busqueda1" class="busqueda">
+      <div class="spinner"></div>
+      <p style="margin: 0; color: #94a3b8;">Buscando Aire 1 (Frente)...</p>
+    </div>
 
-  <div id="contenedor-tarjetas">
-    
-    <div class="tarjeta">
+    <div id="tarjeta1" class="tarjeta">
       <h2>Aire 1 (Frente)</h2>
       <div class="fila">
         <span>Estado</span>
         <label class="switch">
-          <input type="checkbox" id="switchAire1">
+          <input type="checkbox" id="switchAire1" disabled>
           <span class="slider"></span>
         </label>
       </div>
     </div>
+  </div>
 
-    <div class="tarjeta">
+  <div id="seccionAire2">
+    <div id="busqueda2" class="busqueda">
+      <div class="spinner"></div>
+      <p style="margin: 0; color: #94a3b8;">Buscando Aire 2 (Fondo)...</p>
+    </div>
+
+    <div id="tarjeta2" class="tarjeta">
       <h2>Aire 2 (Fondo)</h2>
       <div class="fila">
         <span>Estado</span>
         <label class="switch">
-          <input type="checkbox" id="switchAire2">
+          <input type="checkbox" id="switchAire2" disabled>
           <span class="slider"></span>
         </label>
       </div>
     </div>
-
   </div>
+
 </div>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
 <script>
 /* ===== CONFIGURACIÓN DE TOPICS ===== */
-const topicCmd1     = "aula/C1/aire1/cmd";  
-const topicEstado1  = "aula/C1/aire1/state"; 
+// Aire 1
+const topicCmd1      = "aula/C1/aire1/cmd";  
+const topicEstado1   = "aula/C1/aire1/state"; 
+const topicDisponib1 = "aula/C1/aire1/status"; 
 
-const topicCmd2     = "aula/C1/aire2/cmd";  
-const topicEstado2  = "aula/C1/aire2/state"; 
-
-const topicDisponib = "aula/C1/esp/status"; 
+// Aire 2
+const topicCmd2      = "aula/C1/aire2/cmd";  
+const topicEstado2   = "aula/C1/aire2/state"; 
+const topicDisponib2 = "aula/C1/aire2/status"; 
 
 /* ===== ELEMENTOS DEL DOM ===== */
-const contenedorUI = document.getElementById("contenedor-tarjetas");
-const busquedaUI = document.getElementById("busqueda");
+const tarjeta1    = document.getElementById("tarjeta1");
+const busqueda1   = document.getElementById("busqueda1");
 const switchAire1 = document.getElementById("switchAire1");
+
+const tarjeta2    = document.getElementById("tarjeta2");
+const busqueda2   = document.getElementById("busqueda2");
 const switchAire2 = document.getElementById("switchAire2");
 
+/* ===== CONEXIÓN MQTT ===== */
+// Generamos un ID de cliente único para la web
+const clientIDWeb = "web_client_C1_" + Math.random().toString(16).slice(2);
+
 const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
-  clientId: "web_client_" + Math.random().toString(16).slice(2),
-  reconnectPeriod: 2000
+  clientId: clientIDWeb,
+  reconnectPeriod: 2000 // Intenta reconectar cada 2 segundos si se cae
 });
 
 client.on("connect", () => {
-  console.log("MQTT Conectado");
+  console.log("Web conectada al broker MQTT");
+  
+  // Nos suscribimos a todos los estados de los dos ESP32
   client.subscribe(topicEstado1);
+  client.subscribe(topicDisponib1);
   client.subscribe(topicEstado2);
-  client.subscribe(topicDisponib);
+  client.subscribe(topicDisponib2);
 });
 
+/* ===== RECEPCIÓN DE MENSAJES ===== */
 client.on("message", (topic, message) => {
   const msg = message.toString().toUpperCase();
 
-  // Lógica de disponibilidad
-  if (topic === topicDisponib) {
+  // --- Lógica del AIRE 1 ---
+  if (topic === topicDisponib1) {
     if (msg === "ONLINE") {
-      busquedaUI.style.display = "none";
-      contenedorUI.classList.add("visible");
+      busqueda1.style.display = "none";
+      tarjeta1.style.display = "block";
+      switchAire1.disabled = false;
     } else {
-      busquedaUI.style.display = "block";
-      contenedorUI.classList.remove("visible");
+      busqueda1.style.display = "block";
+      tarjeta1.style.display = "none";
+      switchAire1.disabled = true;
     }
   }
-
-  // Lógica de estado
   if (topic === topicEstado1) {
     switchAire1.checked = (msg === "ON");
-    switchAire1.disabled = false;
+    switchAire1.disabled = false; // Rehabilitar el switch tras recibir confirmación
+  }
+
+  // --- Lógica del AIRE 2 ---
+  if (topic === topicDisponib2) {
+    if (msg === "ONLINE") {
+      busqueda2.style.display = "none";
+      tarjeta2.style.display = "block";
+      switchAire2.disabled = false;
+    } else {
+      busqueda2.style.display = "block";
+      tarjeta2.style.display = "none";
+      switchAire2.disabled = true;
+    }
   }
   if (topic === topicEstado2) {
     switchAire2.checked = (msg === "ON");
-    switchAire2.disabled = false;
+    switchAire2.disabled = false; // Rehabilitar el switch tras recibir confirmación
   }
 });
 
-/* ===== EVENTOS ===== */
-function configurarSwitch(elementoSwitch, topicComando) {
+/* ===== EVENTOS PARA ENVIAR COMANDOS ===== */
+function configurarBoton(elementoSwitch, topicComando) {
   elementoSwitch.addEventListener("change", () => {
+    // Deshabilitar temporalmente para evitar doble clic rápido
     elementoSwitch.disabled = true;
+    
+    // Preparar y enviar el comando (ON / OFF)
     const comando = elementoSwitch.checked ? "ON" : "OFF";
-    client.publish(topicComando, comando, { qos: 1 });
+    client.publish(topicComando, comando, { qos: 1, retain: false });
 
+    // Si el ESP32 no responde en 5 segundos, rehabilitar el botón por seguridad
     setTimeout(() => {
-      if (elementoSwitch.disabled) elementoSwitch.disabled = false;
-    }, 4000);
+      if (elementoSwitch.disabled) {
+        elementoSwitch.disabled = false;
+        console.warn("Tiempo de espera agotado para el comando en: " + topicComando);
+      }
+    }, 5000);
   });
 }
 
-configurarSwitch(switchAire1, topicCmd1);
-configurarSwitch(switchAire2, topicCmd2);
+// Aplicamos la función a ambos switches
+configurarBoton(switchAire1, topicCmd1);
+configurarBoton(switchAire2, topicCmd2);
+
 </script>
 </body>
 </html>
