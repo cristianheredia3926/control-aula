@@ -26,7 +26,7 @@
   /* ===== ESTADO BUSCANDO ===== */
   #busqueda {
     text-align: center;
-    display: block; /* Visible por defecto */
+    display: block;
   }
 
   .spinner {
@@ -52,7 +52,6 @@
     box-shadow: 0 0 25px rgba(0,0,0,0.6);
     transition: all 0.4s ease;
     
-    /* Oculto por defecto hasta detectar ESP32 */
     display: none; 
     opacity: 0;
     transform: translateY(10px);
@@ -65,7 +64,10 @@
   }
 
   h2 { text-align: center; font-weight: 500; margin-bottom: 25px; }
-  .fila { display: flex; justify-content: space-between; align-items: center; }
+  
+  /* Modificado para dar espacio entre los dos aires */
+  .fila { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .fila:last-child { margin-bottom: 0; }
 
   /* ===== SWITCH iOS ===== */
   .switch { position: relative; width: 64px; height: 34px; }
@@ -94,26 +96,43 @@
 
   <div class="control" id="control">
     <h2>Aula C1</h2>
+    
     <div class="fila">
-      <span>Aire acondicionado</span>
+      <span>Aire 1 (Frente)</span>
       <label class="switch">
-        <input type="checkbox" id="switchAire">
+        <input type="checkbox" id="switchAire1">
         <span class="slider"></span>
       </label>
     </div>
+
+    <div class="fila">
+      <span>Aire 2 (Fondo)</span>
+      <label class="switch">
+        <input type="checkbox" id="switchAire2">
+        <span class="slider"></span>
+      </label>
+    </div>
+    
   </div>
 </div>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
-/* ===== CONFIGURACIÓN ===== */
-const topicCmd      = "aula/C1/aire/cmd";    
-const topicEstado   = "aula/C1/aire/state"; 
-const topicDisponib = "aula/C1/aire/status"; // Topic para saber si está online
+/* ===== CONFIGURACIÓN DE TOPICS ===== */
+const topicCmd1     = "aula/C1/aire1/cmd";  
+const topicEstado1  = "aula/C1/aire1/state"; 
 
+const topicCmd2     = "aula/C1/aire2/cmd";  
+const topicEstado2  = "aula/C1/aire2/state"; 
+
+// Un solo topic para saber si el ESP32 está conectado
+const topicDisponib = "aula/C1/esp/status"; 
+
+/* ===== ELEMENTOS DEL DOM ===== */
 const controlUI = document.getElementById("control");
 const busquedaUI = document.getElementById("busqueda");
-const switchAire = document.getElementById("switchAire");
+const switchAire1 = document.getElementById("switchAire1");
+const switchAire2 = document.getElementById("switchAire2");
 
 const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
   clientId: "web_client_" + Math.random().toString(16).slice(2),
@@ -122,7 +141,8 @@ const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
 
 client.on("connect", () => {
   console.log("MQTT Conectado");
-  client.subscribe(topicEstado);
+  client.subscribe(topicEstado1);
+  client.subscribe(topicEstado2);
   client.subscribe(topicDisponib);
 });
 
@@ -134,30 +154,41 @@ client.on("message", (topic, message) => {
     if (msg === "ONLINE") {
       busquedaUI.style.display = "none";
       controlUI.classList.add("visible");
-      controlUI.style.display = "block";
     } else {
       busquedaUI.style.display = "block";
       controlUI.classList.remove("visible");
-      controlUI.style.display = "none";
     }
   }
 
-  // Lógica de estado del switch
-  if (topic === topicEstado) {
-    switchAire.checked = (msg === "ON");
-    switchAire.disabled = false;
+  // Lógica de estado del switch 1
+  if (topic === topicEstado1) {
+    switchAire1.checked = (msg === "ON");
+    switchAire1.disabled = false;
+  }
+
+  // Lógica de estado del switch 2
+  if (topic === topicEstado2) {
+    switchAire2.checked = (msg === "ON");
+    switchAire2.disabled = false;
   }
 });
 
-switchAire.addEventListener("change", () => {
-  switchAire.disabled = true;
-  const comando = switchAire.checked ? "ON" : "OFF";
-  client.publish(topicCmd, comando, { qos: 1 });
+/* ===== FUNCIÓN PARA MANEJAR EVENTOS DE LOS SWITCHES ===== */
+function configurarSwitch(elementoSwitch, topicComando) {
+  elementoSwitch.addEventListener("change", () => {
+    elementoSwitch.disabled = true;
+    const comando = elementoSwitch.checked ? "ON" : "OFF";
+    client.publish(topicComando, comando, { qos: 1 });
 
-  setTimeout(() => {
-    if (switchAire.disabled) switchAire.disabled = false;
-  }, 4000);
-});
+    setTimeout(() => {
+      if (elementoSwitch.disabled) elementoSwitch.disabled = false;
+    }, 4000);
+  });
+}
+
+// Inicializar eventos
+configurarSwitch(switchAire1, topicCmd1);
+configurarSwitch(switchAire2, topicCmd2);
 </script>
 </body>
 </html>
