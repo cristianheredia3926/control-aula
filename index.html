@@ -14,7 +14,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
   }
 
   .wrapper {
@@ -26,7 +26,7 @@
   /* ===== ESTADO BUSCANDO ===== */
   #busqueda {
     text-align: center;
-    display: block;
+    display: block; /* Visible por defecto */
   }
 
   .spinner {
@@ -44,30 +44,43 @@
     100% { transform: rotate(360deg); }
   }
 
-  /* ===== TARJETA CONTROL ===== */
-  .control {
-    background: #020617;
-    padding: 30px;
-    border-radius: 24px;
-    box-shadow: 0 0 25px rgba(0,0,0,0.6);
-    transition: all 0.4s ease;
-    
-    display: none; 
+  /* ===== CONTENEDOR DE TARJETAS ===== */
+  #contenedor-tarjetas {
+    display: none; /* Oculto hasta detectar ESP32 */
+    flex-direction: column;
+    gap: 20px; /* Espacio entre las tarjetas */
     opacity: 0;
     transform: translateY(10px);
+    transition: all 0.4s ease;
   }
 
-  .control.visible {
-    display: block;
+  #contenedor-tarjetas.visible {
+    display: flex;
     opacity: 1;
     transform: translateY(0);
   }
 
-  h2 { text-align: center; font-weight: 500; margin-bottom: 25px; }
+  /* ===== TARJETA INDIVIDUAL ===== */
+  .tarjeta {
+    background: #020617;
+    padding: 25px 30px;
+    border-radius: 24px;
+    box-shadow: 0 0 25px rgba(0,0,0,0.6);
+  }
+
+  h2 { 
+    text-align: center; 
+    font-weight: 500; 
+    margin: 0 0 20px 0; 
+    font-size: 1.2rem;
+    color: #cbd5e1;
+  }
   
-  /* Modificado para dar espacio entre los dos aires */
-  .fila { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-  .fila:last-child { margin-bottom: 0; }
+  .fila { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+  }
 
   /* ===== SWITCH iOS ===== */
   .switch { position: relative; width: 64px; height: 34px; }
@@ -94,25 +107,30 @@
     <p>Buscando dispositivo...</p>
   </div>
 
-  <div class="control" id="control">
-    <h2>Aula C1</h2>
+  <div id="contenedor-tarjetas">
     
-    <div class="fila">
-      <span>Aire 1 (Frente)</span>
-      <label class="switch">
-        <input type="checkbox" id="switchAire1">
-        <span class="slider"></span>
-      </label>
+    <div class="tarjeta">
+      <h2>Aire 1 (Frente)</h2>
+      <div class="fila">
+        <span>Estado</span>
+        <label class="switch">
+          <input type="checkbox" id="switchAire1">
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
 
-    <div class="fila">
-      <span>Aire 2 (Fondo)</span>
-      <label class="switch">
-        <input type="checkbox" id="switchAire2">
-        <span class="slider"></span>
-      </label>
+    <div class="tarjeta">
+      <h2>Aire 2 (Fondo)</h2>
+      <div class="fila">
+        <span>Estado</span>
+        <label class="switch">
+          <input type="checkbox" id="switchAire2">
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
-    
+
   </div>
 </div>
 
@@ -125,11 +143,10 @@ const topicEstado1  = "aula/C1/aire1/state";
 const topicCmd2     = "aula/C1/aire2/cmd";  
 const topicEstado2  = "aula/C1/aire2/state"; 
 
-// Un solo topic para saber si el ESP32 está conectado
 const topicDisponib = "aula/C1/esp/status"; 
 
 /* ===== ELEMENTOS DEL DOM ===== */
-const controlUI = document.getElementById("control");
+const contenedorUI = document.getElementById("contenedor-tarjetas");
 const busquedaUI = document.getElementById("busqueda");
 const switchAire1 = document.getElementById("switchAire1");
 const switchAire2 = document.getElementById("switchAire2");
@@ -149,31 +166,29 @@ client.on("connect", () => {
 client.on("message", (topic, message) => {
   const msg = message.toString().toUpperCase();
 
-  // Lógica de disponibilidad (Online / Offline)
+  // Lógica de disponibilidad
   if (topic === topicDisponib) {
     if (msg === "ONLINE") {
       busquedaUI.style.display = "none";
-      controlUI.classList.add("visible");
+      contenedorUI.classList.add("visible");
     } else {
       busquedaUI.style.display = "block";
-      controlUI.classList.remove("visible");
+      contenedorUI.classList.remove("visible");
     }
   }
 
-  // Lógica de estado del switch 1
+  // Lógica de estado
   if (topic === topicEstado1) {
     switchAire1.checked = (msg === "ON");
     switchAire1.disabled = false;
   }
-
-  // Lógica de estado del switch 2
   if (topic === topicEstado2) {
     switchAire2.checked = (msg === "ON");
     switchAire2.disabled = false;
   }
 });
 
-/* ===== FUNCIÓN PARA MANEJAR EVENTOS DE LOS SWITCHES ===== */
+/* ===== EVENTOS ===== */
 function configurarSwitch(elementoSwitch, topicComando) {
   elementoSwitch.addEventListener("change", () => {
     elementoSwitch.disabled = true;
@@ -186,7 +201,6 @@ function configurarSwitch(elementoSwitch, topicComando) {
   });
 }
 
-// Inicializar eventos
 configurarSwitch(switchAire1, topicCmd1);
 configurarSwitch(switchAire2, topicCmd2);
 </script>
