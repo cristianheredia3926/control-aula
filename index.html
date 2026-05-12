@@ -23,10 +23,9 @@
     padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 30px; /* Espacio entre la sección del aire 1 y el aire 2 */
+    gap: 30px;
   }
 
-  /* ===== ESTADOS DE BÚSQUEDA ===== */
   .busqueda {
     text-align: center;
     padding: 20px;
@@ -50,13 +49,12 @@
     100% { transform: rotate(360deg); }
   }
 
-  /* ===== TARJETAS ===== */
   .tarjeta {
     background: #020617;
     padding: 25px 30px;
     border-radius: 24px;
     box-shadow: 0 0 25px rgba(0,0,0,0.6);
-    display: none; /* Oculto hasta que el ESP32 se reporte ONLINE */
+    display: none;
     animation: fadeIn 0.4s ease-out;
   }
 
@@ -79,7 +77,6 @@
     align-items: center; 
   }
 
-  /* ===== SWITCH iOS ===== */
   .switch { position: relative; width: 64px; height: 34px; }
   .switch input { opacity: 0; width: 0; height: 0; }
   .slider {
@@ -105,7 +102,6 @@
       <div class="spinner"></div>
       <p style="margin: 0; color: #94a3b8;">Buscando Aire...</p>
     </div>
-
     <div id="tarjeta1" class="tarjeta">
       <h2>Aire E7</h2>
       <div class="fila">
@@ -123,7 +119,6 @@
       <div class="spinner"></div>
       <p style="margin: 0; color: #94a3b8;">Buscando Aire...</p>
     </div>
-
     <div id="tarjeta2" class="tarjeta">
       <h2>Aire C6</h2>
       <div class="fila">
@@ -136,21 +131,41 @@
     </div>
   </div>
 
+  <div id="seccionAire3">
+    <div id="busqueda3" class="busqueda">
+      <div class="spinner"></div>
+      <p style="margin: 0; color: #94a3b8;">Buscando Aire...</p>
+    </div>
+    <div id="tarjeta3" class="tarjeta">
+      <h2>Aire B1</h2>
+      <div class="fila">
+        <span>Estado</span>
+        <label class="switch">
+          <input type="checkbox" id="switchAire3" disabled>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
 <script>
 /* ===== CONFIGURACIÓN DE TOPICS ===== */
-// Aire 1
 const topicCmd1      = "aula/C1/aire1/cmd";  
 const topicEstado1   = "aula/C1/aire1/state"; 
 const topicDisponib1 = "aula/C1/aire1/status"; 
 
-// Aire 2
 const topicCmd2      = "aula/C1/aire2/cmd";  
 const topicEstado2   = "aula/C1/aire2/state"; 
 const topicDisponib2 = "aula/C1/aire2/status"; 
+
+// Tópicos Aire 3
+const topicCmd3      = "aula/C1/aire3/cmd";  
+const topicEstado3   = "aula/C1/aire3/state"; 
+const topicDisponib3 = "aula/C1/aire3/status"; 
 
 /* ===== ELEMENTOS DEL DOM ===== */
 const tarjeta1    = document.getElementById("tarjeta1");
@@ -161,30 +176,32 @@ const tarjeta2    = document.getElementById("tarjeta2");
 const busqueda2   = document.getElementById("busqueda2");
 const switchAire2 = document.getElementById("switchAire2");
 
-/* ===== CONEXIÓN MQTT ===== */
-// Generamos un ID de cliente único para la web
-const clientIDWeb = "web_client_C1_" + Math.random().toString(16).slice(2);
+const tarjeta3    = document.getElementById("tarjeta3");
+const busqueda3   = document.getElementById("busqueda3");
+const switchAire3 = document.getElementById("switchAire3");
 
+/* ===== CONEXIÓN MQTT ===== */
+const clientIDWeb = "web_client_C1_" + Math.random().toString(16).slice(2);
 const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
   clientId: clientIDWeb,
-  reconnectPeriod: 2000 // Intenta reconectar cada 2 segundos si se cae
+  reconnectPeriod: 2000 
 });
 
 client.on("connect", () => {
   console.log("Web conectada al broker MQTT");
-  
-  // Nos suscribimos a todos los estados de los dos ESP32
   client.subscribe(topicEstado1);
   client.subscribe(topicDisponib1);
   client.subscribe(topicEstado2);
   client.subscribe(topicDisponib2);
+  client.subscribe(topicEstado3);
+  client.subscribe(topicDisponib3);
 });
 
 /* ===== RECEPCIÓN DE MENSAJES ===== */
 client.on("message", (topic, message) => {
   const msg = message.toString().toUpperCase();
 
-  // --- Lógica del AIRE 1 ---
+  // --- Lógica del AIRE 1 (e7) ---
   if (topic === topicDisponib1) {
     if (msg === "ONLINE") {
       busqueda1.style.display = "none";
@@ -198,10 +215,10 @@ client.on("message", (topic, message) => {
   }
   if (topic === topicEstado1) {
     switchAire1.checked = (msg === "ON");
-    switchAire1.disabled = false; // Rehabilitar el switch tras recibir confirmación
+    switchAire1.disabled = false;
   }
 
-  // --- Lógica del AIRE 2 ---
+  // --- Lógica del AIRE 2 (C6) ---
   if (topic === topicDisponib2) {
     if (msg === "ONLINE") {
       busqueda2.style.display = "none";
@@ -215,33 +232,45 @@ client.on("message", (topic, message) => {
   }
   if (topic === topicEstado2) {
     switchAire2.checked = (msg === "ON");
-    switchAire2.disabled = false; // Rehabilitar el switch tras recibir confirmación
+    switchAire2.disabled = false;
+  }
+
+  // --- Lógica del AIRE 3 (B1) ---
+  if (topic === topicDisponib3) {
+    if (msg === "ONLINE") {
+      busqueda3.style.display = "none";
+      tarjeta3.style.display = "block";
+      switchAire3.disabled = false;
+    } else {
+      busqueda3.style.display = "block";
+      tarjeta3.style.display = "none";
+      switchAire3.disabled = true;
+    }
+  }
+  if (topic === topicEstado3) {
+    switchAire3.checked = (msg === "ON");
+    switchAire3.disabled = false;
   }
 });
 
 /* ===== EVENTOS PARA ENVIAR COMANDOS ===== */
 function configurarBoton(elementoSwitch, topicComando) {
   elementoSwitch.addEventListener("change", () => {
-    // Deshabilitar temporalmente para evitar doble clic rápido
     elementoSwitch.disabled = true;
-    
-    // Preparar y enviar el comando (ON / OFF)
     const comando = elementoSwitch.checked ? "ON" : "OFF";
     client.publish(topicComando, comando, { qos: 1, retain: false });
 
-    // Si el ESP32 no responde en 5 segundos, rehabilitar el botón por seguridad
     setTimeout(() => {
       if (elementoSwitch.disabled) {
         elementoSwitch.disabled = false;
-        console.warn("Tiempo de espera agotado para el comando en: " + topicComando);
       }
     }, 5000);
   });
 }
 
-// Aplicamos la función a ambos switches
 configurarBoton(switchAire1, topicCmd1);
 configurarBoton(switchAire2, topicCmd2);
+configurarBoton(switchAire3, topicCmd3);
 
 </script>
 </body>
